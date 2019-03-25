@@ -7,20 +7,44 @@ import (
 	"os"
 	"runtime/pprof"
 	"strconv"
+	"time"
 )
 
 var productCache map[int64]int64
 
 type SearchResult struct {
+	size         int
 	maxSteps     int
 	totalNumbers int
 	mostSteps    []string
+	searchTime   time.Duration
 }
 
-func NewSearchResult() SearchResult {
-	sr := SearchResult{}
-	sr.mostSteps = make([]string, 1)
+func NewSearchResult(size int) SearchResult {
+	sr := SearchResult{
+		size:      size,
+		mostSteps: make([]string, 1),
+	}
 	return sr
+}
+
+type SearchResults struct {
+	results []SearchResult
+}
+
+func (s SearchResults) ToCSV() string {
+	csv := "size;maxSteps;totalNumbers;searchTime\n"
+	for i := 0; i < len(s.results); i++ {
+		sr := s.results[i]
+		csv += fmt.Sprintf(
+			"%d;%d;%d;%d\n",
+			sr.size,
+			sr.maxSteps,
+			sr.totalNumbers,
+			sr.searchTime,
+		)
+	}
+	return csv
 }
 
 // Represent a number as an array of digits with the added bonus of computing
@@ -143,7 +167,7 @@ func persistRecursive(n int64, step int) int {
 		return step + 1
 	}
 
-	return persistence(p, step+1)
+	return persistRecursive(p, step+1)
 }
 
 func multiply(n int64) int64 {
@@ -193,118 +217,18 @@ func multiply_3d(n int64) int64 {
 	return p
 }
 
-/// OLD STUFF
-
-func increment(arr *[]int, i int) {
-	switch (*arr)[i] {
-	case 4:
-		// Jump the 5
-		(*arr)[i] += 2
-	case 9:
-		// If this is the last digit and it is already a 9, this is the end
-		if i == len(*arr)-1 {
-			*arr = nil
-			return
-		}
-
-		// Edge case when we hit 2999..., the next one is 3466...
-		if i == len(*arr)-3 && (*arr)[i+1] == 9 && (*arr)[i+2] == 2 {
-			(*arr)[i+2] = 3
-			(*arr)[i+1] = 4
-			(*arr)[i] = 6
-			return
-		}
-
-		// Increment the next digit
-		increment(arr, i+1)
-
-		// If the increment of the next digit is actually the end, stop now
-		if *arr == nil {
-			return
-		}
-
-		// Once the next digit is incremented, place the current to the same
-		// value to avoid duplicate permutations
-		(*arr)[i] = (*arr)[i+1]
-	default:
-		(*arr)[i]++
-	}
-	return
-}
-
-func persistence(n int64, steps int) int {
-	p := multiply(n)
-	if p < 10 {
-		return steps + 1
-	}
-
-	return persistence(p, steps+1)
-}
-
-func multiplyArray(arr []int) int64 {
-	var p int64
-	p = 1
-	for i := 0; i < len(arr); i++ {
-		if arr[i] == 0 {
-			return 0
-		} else if arr[i] == 1 {
-			continue
-		}
-		p *= int64(arr[i])
-	}
-	return p
-}
-
-func intArrayToStr(arr []int) string {
-	s := ""
-	for i := len(arr) - 1; i >= 0; i-- {
-		s += strconv.Itoa(arr[i])
-	}
-	return s
-}
-
-func searchOLD(size int) SearchResult {
-	// Starting point is 2666666....
-	arr := make([]int, size)
-	for i := 0; i < size-1; i++ {
-		arr[i] = 6
-	}
-	arr[size-1] = 2
-
-	sr := NewSearchResult()
-	for arr != nil {
-		steps := persistence(multiplyArray(arr), 1)
-		if steps > sr.maxSteps {
-			sr.maxSteps = steps
-			/*
-					sr.mostSteps = []string{intArrayToStr(arr)}
-				} else if steps == sr.maxSteps {
-					sr.mostSteps = append(sr.mostSteps, intArrayToStr(arr))
-			*/
-		}
-		sr.totalNumbers++
-
-		increment(&arr, 0)
-	}
-
-	return sr
-}
-
-/// END OF OLD STUFF
-
 func search(size int) SearchResult {
 	n := NewNumber(size)
-	sr := NewSearchResult()
+	sr := NewSearchResult(size)
+	start := time.Now()
 
 	for {
 		steps := n.Persistence()
 		if steps > sr.maxSteps {
 			sr.maxSteps = steps
-			/*
-					sr.mostSteps = []string{intArrayToStr(arr)}
-				} else if steps == sr.maxSteps {
-					sr.mostSteps = append(sr.mostSteps, intArrayToStr(arr))
-			*/
+			sr.mostSteps = []string{n.ToString()}
+		} else if steps == sr.maxSteps {
+			sr.mostSteps = append(sr.mostSteps, n.ToString())
 		}
 		sr.totalNumbers++
 
@@ -312,6 +236,7 @@ func search(size int) SearchResult {
 			break
 		}
 	}
+	sr.searchTime = time.Since(start)
 
 	return sr
 }
@@ -339,13 +264,11 @@ func main() {
 		log.Fatalf("Invalid argument: %s\n", err)
 	}
 
-	result := search(size)
-	fmt.Printf("Results: %+v\n", result)
-
-	//n := NewNumber(size)
-	//for i := 0; i < 100; i++ {
-	//	fmt.Print(n.Details())
-	//	n.Increment()
-	//}
-	//fmt.Print(n.Details())
+	sr := SearchResults{
+		results: make([]SearchResult, 0),
+	}
+	for i := 2; i <= size; i++ {
+		sr.results = append(sr.results, search(i))
+	}
+	fmt.Print(sr.ToCSV())
 }
