@@ -4,13 +4,20 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"runtime/pprof"
 	"strconv"
 	"time"
 )
 
-var productCache map[int64]int64
+var dCache int
+var dCacheLimit uint64
+var productCache map[uint64]uint64
+var powers10 []uint64
+
+var cacheHits = 0
+var cacheMisses = 0
 
 type SearchResult struct {
 	size         int
@@ -56,16 +63,16 @@ func (s SearchResults) ToCSV() string {
 //   (index)       0      1      2      3      4      5      6
 //   (designation) lowest                                    highest
 type Number struct {
-	size      int     // Number of digits of the number
-	digits    []int   // Array of digits
-	pProducts []int64 // Partial products of the digits
+	size      int      // Number of digits of the number
+	digits    []int    // Array of digits
+	pProducts []uint64 // Partial products of the digits
 }
 
 func NewNumber(size int) *Number {
 	n := Number{
 		size:      size,
 		digits:    make([]int, size),
-		pProducts: make([]int64, size),
+		pProducts: make([]uint64, size),
 	}
 
 	// Starting point is 2666666....
@@ -78,13 +85,13 @@ func NewNumber(size int) *Number {
 	// lowest digit
 	n.pProducts[size-1] = 2
 	for i := size - 2; i >= 0; i-- {
-		n.pProducts[i] = n.pProducts[i+1] * int64(n.digits[i])
+		n.pProducts[i] = n.pProducts[i+1] * uint64(n.digits[i])
 	}
 
 	return &n
 }
 
-func (n *Number) Product() int64 {
+func (n *Number) Product() uint64 {
 	return n.pProducts[0]
 }
 
@@ -97,9 +104,9 @@ func (n *Number) Increment() bool {
 	// Update all the partial products down from the highest updated digit
 	for i := highest; i >= 0; i-- {
 		if i == n.size-1 {
-			n.pProducts[i] = int64(n.digits[i])
+			n.pProducts[i] = uint64(n.digits[i])
 		} else {
-			n.pProducts[i] = n.pProducts[i+1] * int64(n.digits[i])
+			n.pProducts[i] = n.pProducts[i+1] * uint64(n.digits[i])
 		}
 	}
 
@@ -146,7 +153,7 @@ func (n *Number) Persistence() int {
 	return persistRecursive(n.Product(), 1)
 }
 
-func (n *Number) ToString() string {
+func (n *Number) String() string {
 	s := ""
 	for i := n.size - 1; i >= 0; i-- {
 		s += strconv.Itoa(n.digits[i])
@@ -157,12 +164,12 @@ func (n *Number) ToString() string {
 func (n *Number) Details() string {
 	return fmt.Sprintf(
 		"%s (%d):\n - digits:    %v\n - pProducts: %v\n",
-		n.ToString(), n.size, n.digits, n.pProducts,
+		n.String(), n.size, n.digits, n.pProducts,
 	)
 }
 
-func persistRecursive(n int64, step int) int {
-	p := multiply(n)
+func persistRecursive(n uint64, step int) int {
+	p := multiplyDigits(n)
 	if p < 10 {
 		return step + 1
 	}
@@ -170,50 +177,40 @@ func persistRecursive(n int64, step int) int {
 	return persistRecursive(p, step+1)
 }
 
-func multiply(n int64) int64 {
-	var p int64
+func multiplyDigits(n uint64) uint64 {
+	var p uint64
 	p = 1
 
-	for n >= 10000 {
-		m := n / 10000
-		p *= multiply_4d(n - m*10000)
+	for n >= dCacheLimit {
+		m := n / dCacheLimit
+		p *= multiplyDigitsWithCache(n - m*dCacheLimit)
 		if p == 0 {
 			return 0
 		}
 		n = m
 	}
-	return p * multiply_3d(n)
+	return p * multiplyDigitsWithCache(n)
 }
 
-func multiply_4d(n int64) int64 {
-	var p int64
-	var ok bool
-	if p, ok = productCache[n]; ok {
-		return p
-	}
-	p = ((n / 1000) % 10) * ((n / 100) % 10) * ((n / 10) % 10) * (n % 10)
-	productCache[n] = p
-	return p
-}
-
-func multiply_3d(n int64) int64 {
-	var p int64
-	var ok bool
-	if p, ok = productCache[n]; ok {
-		return p
+func multiplyDigitsWithCache(n uint64) uint64 {
+	if pCached, ok := productCache[n]; ok {
+		cacheHits++
+		return pCached
 	}
 
-	switch {
-	case n < 10:
-		p = n
-	case n < 100:
-		p = ((n / 10) % 10) * (n % 10)
-	case n < 1000:
-		p = ((n / 100) % 10) * ((n / 10) % 10) * (n % 10)
-	default:
-		p = ((n / 1000) % 10) * ((n / 100) % 10) * ((n / 10) % 10) * (n % 10)
+	p := n % 10
+
+	var m uint64
+	for i := 0; i < len(powers10) && n > powers10[i]; i++ {
+		m = ((n / powers10[i]) % 10)
+		if m == 0 {
+			p = 0
+			break
+		}
+		p *= m
 	}
 	productCache[n] = p
+	cacheMisses++
 	return p
 }
 
@@ -226,9 +223,9 @@ func search(size int) SearchResult {
 		steps := n.Persistence()
 		if steps > sr.maxSteps {
 			sr.maxSteps = steps
-			sr.mostSteps = []string{n.ToString()}
+			sr.mostSteps = []string{n.String()}
 		} else if steps == sr.maxSteps {
-			sr.mostSteps = append(sr.mostSteps, n.ToString())
+			sr.mostSteps = append(sr.mostSteps, n.String())
 		}
 		sr.totalNumbers++
 
@@ -242,10 +239,12 @@ func search(size int) SearchResult {
 }
 
 func main() {
-	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
+	cpuProfile := flag.String("cpuprofile", "", "write cpu profile to file")
+	dCache := flag.Int("dcache", 4, "number of digits for the multiplication cache")
 	flag.Parse()
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
+
+	if *cpuProfile != "" {
+		f, err := os.Create(*cpuProfile)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -255,11 +254,27 @@ func main() {
 
 	args := flag.Args()
 	if len(args) < 1 {
-		log.Fatalf("Usage: %s [-cpuprofile=<file>] size\n", os.Args[0])
+		log.Fatalf("Usage: %s [-cpuprofile=<file>] [-dCache=<int>] size\n", os.Args[0])
 	}
-	productCache = make(map[int64]int64, 11000)
 
-	size, err := strconv.Atoi(args[0])
+	// Build caches
+	productCache = make(map[uint64]uint64, int(math.Pow10(*dCache)+math.Pow10(*dCache-1)))
+	powers10 = make([]uint64, *dCache-1)
+	dCacheLimit = uint64(math.Pow10(*dCache))
+	for i := 1; i < *dCache; i++ {
+		powers10[i-1] = uint64(math.Pow10(i))
+	}
+
+	var start = 2
+	var stop = 2
+	var err error
+	if len(args) == 1 {
+		stop, err = strconv.Atoi(args[0])
+		start = stop
+	} else {
+		start, err = strconv.Atoi(args[0])
+		stop, err = strconv.Atoi(args[1])
+	}
 	if err != nil {
 		log.Fatalf("Invalid argument: %s\n", err)
 	}
@@ -267,8 +282,9 @@ func main() {
 	sr := SearchResults{
 		results: make([]SearchResult, 0),
 	}
-	for i := 2; i <= size; i++ {
+	for i := start; i <= stop; i++ {
 		sr.results = append(sr.results, search(i))
 	}
 	fmt.Print(sr.ToCSV())
+	log.Printf("Cache: limit=%d hits=%d misses=%d\n", dCacheLimit, cacheHits, cacheMisses)
 }
