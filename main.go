@@ -84,8 +84,12 @@ func multiplyDigitsWithCache(n *big.Int) *big.Int {
 	return p
 }
 
-func search(size int) SearchResult {
+func search(size int, maxSize int) SearchResults {
+	log.Printf("Starting searching with %d digits\n", size)
 	n := NewNumber(size)
+	r := SearchResults{
+		results: make([]SearchResult, 0),
+	}
 	sr := NewSearchResult(size)
 	start := time.Now()
 
@@ -101,12 +105,21 @@ func search(size int) SearchResult {
 		sr.numbersCount++
 
 		if !n.Increment() {
-			break
+			sr.searchTime = time.Since(start)
+			r.results = append(r.results, sr)
+			if size >= maxSize {
+				break
+			}
+			log.Printf("Computation for %d digits in %.2fms\n", size, float64(sr.searchTime)/float64(time.Millisecond))
+			size++
+			n = NewNumber(size)
+			sr = NewSearchResult(size)
+			start = time.Now()
 		}
 	}
-	sr.searchTime = time.Since(start)
+	log.Println("Maximum number of digits to look for attained.")
 
-	return sr
+	return r
 }
 
 func main() {
@@ -131,10 +144,12 @@ func main() {
 	// Build caches
 	productCache = make(map[string]*big.Int, int(math.Pow10(*dCache)+math.Pow10(*dCache-1)))
 	powers10 = make([]*big.Int, *dCache-1)
-	dCacheLimit = big.NewInt(int64(math.Pow10(*dCache)))
+	dCacheSize := math.Pow10(*dCache)
+	dCacheLimit = big.NewInt(int64(dCacheSize))
 	for i := 1; i < *dCache; i++ {
 		powers10[i-1] = big.NewInt(int64(math.Pow10(i)))
 	}
+	log.Printf("Cache size: %d entries\n", int64(dCacheSize))
 
 	var start = 2
 	var stop = 2
@@ -150,12 +165,13 @@ func main() {
 		log.Fatalf("Invalid argument: %s\n", err)
 	}
 
-	sr := SearchResults{
-		results: make([]SearchResult, 0),
+	if start < 3 {
+		log.Fatalf("Cannot be used with integers with less than 3 digits\n")
 	}
-	for i := start; i <= stop; i++ {
-		sr.results = append(sr.results, search(i))
-	}
-	fmt.Print(sr.ToCSV())
-	fmt.Printf("Cache: limit=%d hits=%d misses=%d\n", dCacheLimit, cacheHits, cacheMisses)
+
+	sr := search(start, stop+1)
+	fmt.Print(sr.CSV())
+
+	cacheUsage := 100 * float64(cacheMisses) / dCacheSize
+	log.Printf("Cache results: %d hits, %d misses, %.2f%% cache filled\n", cacheHits, cacheMisses, cacheUsage)
 }

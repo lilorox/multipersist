@@ -27,7 +27,7 @@ type SearchResults struct {
 	results []SearchResult
 }
 
-func (s SearchResults) ToCSV() string {
+func (s SearchResults) CSV() string {
 	csv := "size;maxPersistence;numbersCount;searchTime\n"
 	for i := 0; i < len(s.results); i++ {
 		sr := s.results[i]
