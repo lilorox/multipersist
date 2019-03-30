@@ -7,7 +7,10 @@ import (
 )
 
 // Frequently used big constants
-var big0 = big.NewInt(0)
+var (
+	big0  = big.NewInt(0)
+	big10 = big.NewInt(10)
+)
 
 // Represent a number as an array of digits with the added bonus of computing
 // the partial products while incrementing it.
@@ -24,7 +27,7 @@ type Number struct {
 }
 
 func NewNumber(size int) *Number {
-	n := Number{
+	n := &Number{
 		size:      size,
 		digits:    make([]int, size),
 		pProducts: make([]*big.Int, size),
@@ -33,7 +36,7 @@ func NewNumber(size int) *Number {
 	n.initDigits()
 	n.initProducts()
 
-	return &n
+	return n
 }
 
 // initDigits fills the digits slice with the starting Number of this size.
@@ -47,9 +50,15 @@ func (n *Number) initDigits() {
 
 // initProducts compute the pProducts slice from the digits
 func (n *Number) initProducts() {
-	n.pProducts[n.size-1] = big.NewInt(2)
+	n.pProducts[n.size-1] = big.NewInt(int64(n.digits[n.size-1]))
 	for i := n.size - 2; i >= 0; i-- {
-		n.pProducts[i] = new(big.Int).Mul(n.pProducts[i+1], big.NewInt(int64(n.digits[i])))
+		if n.pProducts[i] == nil {
+			n.pProducts[i] = new(big.Int)
+		}
+		n.pProducts[i] = new(big.Int).Mul(
+			n.pProducts[i+1],
+			big.NewInt(int64(n.digits[i])),
+		)
 	}
 }
 
@@ -147,7 +156,7 @@ func (n *Number) Details() string {
 func persistRecursive(n *big.Int, step int) int {
 	p := multiplyDigits(n)
 
-	if p.Cmp(big.NewInt(10)) == -1 {
+	if p.Cmp(big10) == -1 {
 		return step + 1
 	}
 
@@ -157,15 +166,13 @@ func persistRecursive(n *big.Int, step int) int {
 func multiplyDigits(n *big.Int) *big.Int {
 	p := big.NewInt(1)
 	s := n.String()
-	//fmt.Printf("n=%s dCache=%d\n", s, dCache)
 
-	for len(s) >= dCache {
-		//fmt.Printf(" -> multiply(%s)\n", s[:dCache])
-		p.Mul(p, multiplyDigitsWithCache(s[:dCache]))
+	for len(s) > dCache {
+		p.Mul(p, multiplyDigitsWithCache(s[len(s)-dCache:]))
 		if p.Cmp(big0) == 0 {
 			return p
 		}
-		s = s[dCache:]
+		s = s[:len(s)-dCache]
 	}
 	if len(s) > 0 {
 		p.Mul(p, multiplyDigitsWithCache(s))
@@ -183,12 +190,11 @@ func multiplyDigitsWithCache(s string) *big.Int {
 	if s[0] != '0' {
 		p.SetInt64(int64(s[0] - '0'))
 		for i := 1; i < len(s); i++ {
-			n := int64(s[i] - '0')
-			if n == 0 {
+			if s[i] == '0' {
 				p.Set(big0)
 				break
 			}
-			p.Mul(p, big.NewInt(n))
+			p.Mul(p, big.NewInt(int64(s[i]-'0')))
 		}
 	}
 	productCache[s] = p

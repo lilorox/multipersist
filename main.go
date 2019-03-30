@@ -48,7 +48,6 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	dCache = *dCacheFlag
 	args := flag.Args()
 	if len(args) < 1 {
 		fmt.Fprintf(os.Stderr, "Usage: %s [-version] [-cpuprofile=<file>] [-dCache=<int>] size\n", os.Args[0])
@@ -56,18 +55,22 @@ func main() {
 	}
 
 	// Initialize caches
-	productCache = make(map[string]*big.Int, int(math.Pow10(dCache)+math.Pow10(dCache-1)))
-	powers10 = make([]*big.Int, dCache-1)
+	dCache = *dCacheFlag
 	dCacheSize := math.Pow10(dCache)
+	productCacheSize := int(dCacheSize + math.Pow10(dCache-1))
+	productCache = make(map[string]*big.Int, productCacheSize)
 	dCacheLimit = big.NewInt(int64(dCacheSize))
+
+	powers10 = make([]*big.Int, dCache-1)
 	for i := 1; i < dCache; i++ {
 		powers10[i-1] = big.NewInt(int64(math.Pow10(i)))
 	}
-	log.Printf("Cache size: %d entries\n", int64(dCacheSize))
 
-	var start = 2
-	var stop = 2
-	var err error
+	var (
+		start = 2
+		stop  = 2
+		err   error
+	)
 	if len(args) == 1 {
 		stop, err = strconv.Atoi(args[0])
 		start = stop
@@ -84,9 +87,9 @@ func main() {
 	}
 
 	sr := search(start, stop)
-	//fmt.Print(sr.CSV())
 	sr.Print()
 
-	cacheUsage := 100 * float64(cacheMisses) / dCacheSize
-	log.Printf("Cache results: %d hits, %d misses, %.2f%% cache filled\n", cacheHits, cacheMisses, cacheUsage)
+	log.Printf("Cache initial size: %d entries\n", productCacheSize)
+	log.Printf("Cache used: %d entries\n", len(productCache))
+	log.Printf("Cache results: %d hits, %d misses\n", cacheHits, cacheMisses)
 }
