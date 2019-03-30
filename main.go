@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"math"
 	"math/big"
@@ -11,21 +12,35 @@ import (
 )
 
 // Global variables
-var dCache int
-var dCacheLimit *big.Int
-var productCache map[string]*big.Int
-var powers10 []*big.Int
+var (
+	//Build management
+	Version string
+	Build   string
 
-var cacheHits = 0
-var cacheMisses = 0
+	// Cache management
+	dCache       int
+	dCacheLimit  *big.Int
+	productCache map[string]*big.Int
+	powers10     []*big.Int
+
+	// Cache statistics
+	cacheHits   = 0
+	cacheMisses = 0
+)
 
 func main() {
-	cpuProfile := *flag.String("cpuprofile", "", "write cpu profile to file")
-	dCache = *flag.Int("dcache", 4, "number of digits for the multiplication cache")
+	version := flag.Bool("version", false, "version information")
+	cpuProfile := flag.String("cpuprofile", "", "write cpu profile to file")
+	dCacheFlag := flag.Int("dcache", 4, "number of digits for the multiplication cache")
 	flag.Parse()
 
-	if cpuProfile != "" {
-		f, err := os.Create(cpuProfile)
+	if *version {
+		fmt.Printf("Version: %s, Build: %s\n", Version, Build)
+		os.Exit(0)
+	}
+
+	if *cpuProfile != "" {
+		f, err := os.Create(*cpuProfile)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -33,9 +48,11 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
+	dCache = *dCacheFlag
 	args := flag.Args()
 	if len(args) < 1 {
-		log.Fatalf("Usage: %s [-cpuprofile=<file>] [-dCache=<int>] size\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [-version] [-cpuprofile=<file>] [-dCache=<int>] size\n", os.Args[0])
+		os.Exit(1)
 	}
 
 	// Initialize caches
