@@ -6,6 +6,9 @@ import (
 	"strconv"
 )
 
+// Frequently used big constants
+var big0 = big.NewInt(0)
+
 // Represent a number as an array of digits with the added bonus of computing
 // the partial products while incrementing it.
 //
@@ -27,24 +30,45 @@ func NewNumber(size int) *Number {
 		pProducts: make([]*big.Int, size),
 	}
 
-	// Starting point is 2666666....
-	for i := 0; i < size-1; i++ {
-		n.digits[i] = 6
-	}
-	n.digits[size-1] = 2
-
-	// Array of the partial products of the digits from the highest to the
-	// lowest digit
-	n.pProducts[size-1] = big.NewInt(2)
-	for i := size - 2; i >= 0; i-- {
-		n.pProducts[i] = new(big.Int).Mul(n.pProducts[i+1], big.NewInt(int64(n.digits[i])))
-	}
+	n.initDigits()
+	n.initProducts()
 
 	return &n
 }
 
-func (n *Number) Product() *big.Int {
-	return n.pProducts[0]
+// initDigits fills the digits slice with the starting Number of this size.
+// Starting point is 2666666....
+func (n *Number) initDigits() {
+	for i := 0; i < n.size-1; i++ {
+		n.digits[i] = 6
+	}
+	n.digits[n.size-1] = 2
+}
+
+// initProducts compute the pProducts slice from the digits
+func (n *Number) initProducts() {
+	n.pProducts[n.size-1] = big.NewInt(2)
+	for i := n.size - 2; i >= 0; i-- {
+		n.pProducts[i] = new(big.Int).Mul(n.pProducts[i+1], big.NewInt(int64(n.digits[i])))
+	}
+}
+
+func (n *Number) Size() int {
+	return n.Size()
+}
+
+func (n *Number) Resize(size int) {
+	if size > n.size {
+		n.digits = append(n.digits, make([]int, size-n.size)...)
+		n.pProducts = append(n.pProducts, make([]*big.Int, size-n.size)...)
+	} else if size < n.size {
+		n.digits = make([]int, size)
+		n.pProducts = make([]*big.Int, size)
+	}
+
+	n.size = size
+	n.initDigits()
+	n.initProducts()
 }
 
 func (n *Number) Increment() bool {
@@ -102,7 +126,7 @@ func (n *Number) incRecursive(i int) int {
 }
 
 func (n *Number) Persistence() int {
-	return persistRecursive(n.Product(), 1)
+	return persistRecursive(n.pProducts[0], 1)
 }
 
 func (n *Number) String() string {
@@ -118,4 +142,56 @@ func (n *Number) Details() string {
 		"%s (%d):\n - digits:    %v\n - pProducts: %v\n",
 		n.String(), n.size, n.digits, n.pProducts,
 	)
+}
+
+func persistRecursive(n *big.Int, step int) int {
+	p := multiplyDigits(n)
+
+	if p.Cmp(big.NewInt(10)) == -1 {
+		return step + 1
+	}
+
+	return persistRecursive(p, step+1)
+}
+
+func multiplyDigits(n *big.Int) *big.Int {
+	p := big.NewInt(1)
+	s := n.String()
+	//fmt.Printf("n=%s dCache=%d\n", s, dCache)
+
+	for len(s) >= dCache {
+		//fmt.Printf(" -> multiply(%s)\n", s[:dCache])
+		p.Mul(p, multiplyDigitsWithCache(s[:dCache]))
+		if p.Cmp(big0) == 0 {
+			return p
+		}
+		s = s[dCache:]
+	}
+	if len(s) > 0 {
+		p.Mul(p, multiplyDigitsWithCache(s))
+	}
+	return p
+}
+
+func multiplyDigitsWithCache(s string) *big.Int {
+	if pCached, ok := productCache[s]; ok {
+		cacheHits++
+		return pCached
+	}
+
+	p := new(big.Int)
+	if s[0] != '0' {
+		p.SetInt64(int64(s[0] - '0'))
+		for i := 1; i < len(s); i++ {
+			n := int64(s[i] - '0')
+			if n == 0 {
+				p.Set(big0)
+				break
+			}
+			p.Mul(p, big.NewInt(n))
+		}
+	}
+	productCache[s] = p
+	cacheMisses++
+	return p
 }
