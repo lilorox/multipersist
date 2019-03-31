@@ -16,19 +16,30 @@ type SearchResult struct {
 	searchTime     time.Duration // Duration of the search
 }
 
-func NewSearchResult(size int) SearchResult {
-	sr := SearchResult{
+func NewSearchResult(size int) *SearchResult {
+	sr := &SearchResult{
 		size:           size,
-		mostPersistent: make([]string, 1),
+		mostPersistent: make([]string, 0),
 	}
 	return sr
 }
 
 type SearchResults struct {
-	results []SearchResult
+	results []*SearchResult
 }
 
-func (s SearchResults) CSV() string {
+func NewSearchResults() *SearchResults {
+	s := &SearchResults{
+		results: make([]*SearchResult, 0),
+	}
+	return s
+}
+
+func (s *SearchResults) Add(sr *SearchResult) {
+	s.results = append(s.results, sr)
+}
+
+func (s *SearchResults) CSV() string {
 	csv := "size;maxPersistence;numbersCount;nbMostPersistent;searchTime\n"
 	for i := 0; i < len(s.results); i++ {
 		sr := s.results[i]
@@ -44,7 +55,7 @@ func (s SearchResults) CSV() string {
 	return csv
 }
 
-func (s SearchResults) Print() {
+func (s *SearchResults) Print() {
 	fmt.Println("Size       maxPersistence   numbersCount   nbMostPersistent   searchTime")
 	for i := 0; i < len(s.results); i++ {
 		sr := s.results[i]
@@ -59,39 +70,42 @@ func (s SearchResults) Print() {
 	}
 }
 
-func search(size int, maxSize int) SearchResults {
+func search(size int, maxSize int) *SearchResults {
 	log.Printf("Starting searching with %d digits\n", size)
 	n := NewNumber(size)
-	r := SearchResults{
-		results: make([]SearchResult, 0),
-	}
+	r := NewSearchResults()
 	sr := NewSearchResult(size)
 	start := time.Now()
 
+	m := n.Product()
 	for {
-		steps := n.Persistence()
+		steps := persistence(m, 1)
 		if steps > sr.maxPersistence {
 			sr.maxPersistence = steps
-			sr.mostPersistent = []string{n.String()}
-		} else if steps == sr.maxPersistence {
-			sr.mostPersistent = append(sr.mostPersistent, n.String())
+			/*
+					sr.mostPersistent = []string{n.String()}
+				} else if steps == sr.maxPersistence {
+					sr.mostPersistent = append(sr.mostPersistent, n.String())
+			*/
 		}
 		sr.numbersCount++
 
-		if !n.Increment() {
+		m = n.Increment()
+		if m == nil {
 			sr.searchTime = time.Since(start)
-			r.results = append(r.results, sr)
-			if size >= maxSize {
-				break
-			}
+			r.Add(sr)
 			log.Printf(
 				"Max persistence for %d digits: %d (%.2fms)\n",
 				size,
 				sr.maxPersistence,
 				float64(sr.searchTime)/float64(time.Millisecond),
 			)
+			if size >= maxSize {
+				break
+			}
 			size++
 			n.Resize(size)
+			m = n.Product()
 			sr = NewSearchResult(size)
 			start = time.Now()
 		}

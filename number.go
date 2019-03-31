@@ -80,10 +80,10 @@ func (n *Number) Resize(size int) {
 	n.initProducts()
 }
 
-func (n *Number) Increment() bool {
+func (n *Number) Increment() *big.Int {
 	highest := n.incRecursive(0)
 	if highest == -1 {
-		return false
+		return nil
 	}
 
 	// Update all the partial products down from the highest updated digit
@@ -95,7 +95,7 @@ func (n *Number) Increment() bool {
 		}
 	}
 
-	return true
+	return n.pProducts[0]
 }
 
 func (n *Number) incRecursive(i int) int {
@@ -134,10 +134,6 @@ func (n *Number) incRecursive(i int) int {
 	return highest
 }
 
-func (n *Number) Persistence() int {
-	return persistRecursive(n.pProducts[0], 1)
-}
-
 func (n *Number) String() string {
 	s := ""
 	for i := n.size - 1; i >= 0; i-- {
@@ -153,14 +149,18 @@ func (n *Number) Details() string {
 	)
 }
 
-func persistRecursive(n *big.Int, step int) int {
+func (n *Number) Product() *big.Int {
+	return n.pProducts[0]
+}
+
+func persistence(n *big.Int, step int) int {
 	p := multiplyDigits(n)
 
 	if p.Cmp(big10) == -1 {
 		return step + 1
 	}
 
-	return persistRecursive(p, step+1)
+	return persistence(p, step+1)
 }
 
 func multiplyDigits(n *big.Int) *big.Int {

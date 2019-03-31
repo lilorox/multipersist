@@ -86,10 +86,12 @@ func main() {
 		log.Fatalf("Cannot be used with integers with less than 3 digits\n")
 	}
 
-	sr := search(start, stop)
-	sr.Print()
+	//sr := search(start, stop)
+	//sr.Print()
 
-	log.Printf("Cache initial size: %d entries\n", productCacheSize)
-	log.Printf("Cache used: %d entries\n", len(productCache))
-	log.Printf("Cache results: %d hits, %d misses\n", cacheHits, cacheMisses)
+	//log.Printf("Cache initial size: %d entries\n", productCacheSize)
+	//log.Printf("Cache used: %d entries\n", len(productCache))
+	//log.Printf("Cache results: %d hits, %d misses\n", cacheHits, cacheMisses)
+
+	search2(generateNumbers(start, stop))
 }
