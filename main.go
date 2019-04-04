@@ -28,6 +28,20 @@ var (
 	cacheMisses = 0
 )
 
+func initCache(size int) {
+	dCache = size
+	dCacheSize := math.Pow10(size)
+	dCacheLimit = big.NewInt(int64(dCacheSize))
+
+	productCacheSize := int(dCacheSize + math.Pow10(dCache-1))
+	productCache = make(map[string]*big.Int, productCacheSize)
+
+	powers10 = make([]*big.Int, dCache-1)
+	for i := 1; i < dCache; i++ {
+		powers10[i-1] = big.NewInt(int64(math.Pow10(i)))
+	}
+}
+
 func main() {
 	version := flag.Bool("version", false, "version information")
 	cpuProfile := flag.String("cpuprofile", "", "write cpu profile to file")
@@ -55,16 +69,7 @@ func main() {
 	}
 
 	// Initialize caches
-	dCache = *dCacheFlag
-	dCacheSize := math.Pow10(dCache)
-	productCacheSize := int(dCacheSize + math.Pow10(dCache-1))
-	productCache = make(map[string]*big.Int, productCacheSize)
-	dCacheLimit = big.NewInt(int64(dCacheSize))
-
-	powers10 = make([]*big.Int, dCache-1)
-	for i := 1; i < dCache; i++ {
-		powers10[i-1] = big.NewInt(int64(math.Pow10(i)))
-	}
+	initCache(*dCacheFlag)
 
 	var (
 		start = 2
@@ -89,7 +94,7 @@ func main() {
 	sr := search(start, stop)
 	sr.Print()
 
-	log.Printf("Cache initial size: %d entries\n", productCacheSize)
-	log.Printf("Cache used: %d entries\n", len(productCache))
-	log.Printf("Cache results: %d hits, %d misses\n", cacheHits, cacheMisses)
+	//log.Printf("Cache initial size: %d entries\n", productCacheSize)
+	//log.Printf("Cache used: %d entries\n", len(productCache))
+	//log.Printf("Cache results: %d hits, %d misses\n", cacheHits, cacheMisses)
 }
