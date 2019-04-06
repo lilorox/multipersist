@@ -12,7 +12,7 @@ var (
 	big10 = big.NewInt(10)
 )
 
-// Represent a number as an array of digits with the added bonus of computing
+// Represents a number as an array of digits with the added bonus of computing
 // the partial products while incrementing it.
 //
 // What this struct looks like for the number 2778889:
@@ -62,10 +62,9 @@ func (n *Number) initProducts() {
 	}
 }
 
-func (n *Number) Size() int {
-	return n.Size()
-}
-
+// Resize rebuilds the number and the partial products after reducing or
+// increasing the size of the current number.
+// If the size stays the same, the number will be initialized again anyway.
 func (n *Number) Resize(size int) {
 	if size > n.size {
 		n.digits = append(n.digits, make([]int, size-n.size)...)
@@ -80,6 +79,8 @@ func (n *Number) Resize(size int) {
 	n.initProducts()
 }
 
+// Increment increments the number by one, recursively digit by digit and
+// update the partial products along the way.
 func (n *Number) Increment() bool {
 	highest := n.incRecursive(0)
 	if highest == -1 {
@@ -98,6 +99,8 @@ func (n *Number) Increment() bool {
 	return true
 }
 
+// incRecursive increments the digit at the specified position and recursively
+// increments the higher digits if needed.
 func (n *Number) incRecursive(i int) int {
 	highest := i
 
@@ -134,10 +137,12 @@ func (n *Number) incRecursive(i int) int {
 	return highest
 }
 
+// Persistence returns the multiplicative persistence of the number
 func (n *Number) Persistence() int {
-	return persistRecursive(n.pProducts[0], 1)
+	return persistence(n.pProducts[0], 1)
 }
 
+// String returns a string representation of the number
 func (n *Number) String() string {
 	s := ""
 	for i := n.size - 1; i >= 0; i-- {
@@ -146,6 +151,7 @@ func (n *Number) String() string {
 	return s
 }
 
+// Details returns a detailed description of the number for debug purposes
 func (n *Number) Details() string {
 	return fmt.Sprintf(
 		"%s (%d):\n - digits:    %v\n - pProducts: %v\n",
@@ -153,16 +159,19 @@ func (n *Number) Details() string {
 	)
 }
 
-func persistRecursive(n *big.Int, step int) int {
+// perisistence returns the persistence of a big.Int and is used recursively to
+// compute the number of steps.
+func persistence(n *big.Int, step int) int {
 	p := multiplyDigits(n)
 
 	if p.Cmp(big10) == -1 {
 		return step + 1
 	}
 
-	return persistRecursive(p, step+1)
+	return persistence(p, step+1)
 }
 
+// multiplyDigits returns the product of the digits of a big.Int.
 func multiplyDigits(n *big.Int) *big.Int {
 	p := big.NewInt(1)
 	s := n.String()
@@ -180,6 +189,8 @@ func multiplyDigits(n *big.Int) *big.Int {
 	return p
 }
 
+// multiplyDigitsWithCache uses a cache to return the products of the digits
+// of a chunk of a number represented as a string.
 func multiplyDigitsWithCache(s string) *big.Int {
 	if pCached, ok := productCache[s]; ok {
 		cacheHits++
