@@ -17,7 +17,7 @@ VERBOSE = 0
 QUIET   = $(if $(filter 1,$VERBOSE),,@)
 BULLET  = $(shell printf "\033[34;1m▶\033[0m")
 
-.PHONY: all build check clean fmt lint install vet
+.PHONY: all bench build check clean fmt lint install vet
 
 all: check install
 
@@ -27,6 +27,9 @@ $(TARGET): $(SRC)
 
 build: $(TARGET)
 	@true
+
+bench:
+	@go test -bench=.
 
 clean:
 	$(info $(BULLET) cleaning…)

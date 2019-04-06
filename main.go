@@ -18,10 +18,11 @@ var (
 	Build   string
 
 	// Cache management
-	dCache       int
-	dCacheLimit  *big.Int
-	productCache map[string]*big.Int
-	powers10     []*big.Int
+	dCache           int
+	dCacheLimit      *big.Int
+	productCache     map[string]*big.Int
+	productCacheSize int
+	powers10         []*big.Int
 
 	// Cache statistics
 	cacheHits   = 0
@@ -33,7 +34,7 @@ func initCache(size int) {
 	dCacheSize := math.Pow10(size)
 	dCacheLimit = big.NewInt(int64(dCacheSize))
 
-	productCacheSize := int(dCacheSize + math.Pow10(dCache-1))
+	productCacheSize = int(dCacheSize + math.Pow10(dCache-1))
 	productCache = make(map[string]*big.Int, productCacheSize)
 
 	powers10 = make([]*big.Int, dCache-1)
@@ -64,7 +65,11 @@ func main() {
 
 	args := flag.Args()
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "Usage: %s [-version] [-cpuprofile=<file>] [-dCache=<int>] size\n", os.Args[0])
+		fmt.Fprintf(
+			os.Stderr,
+			"Usage: %s [-version] [-cpuprofile=<file>] [-dCache=<int>] size\n",
+			os.Args[0],
+		)
 		os.Exit(1)
 	}
 
@@ -91,10 +96,11 @@ func main() {
 		log.Fatalf("Cannot be used with integers with less than 3 digits\n")
 	}
 
-	sr := search(start, stop)
-	sr.Print()
-
-	//log.Printf("Cache initial size: %d entries\n", productCacheSize)
-	//log.Printf("Cache used: %d entries\n", len(productCache))
-	//log.Printf("Cache results: %d hits, %d misses\n", cacheHits, cacheMisses)
+	results := NewResults()
+	for size := start; size <= stop; size++ {
+		s := NewSearcher(size)
+		*results = append(*results, s.Search())
+	}
+	results.Print()
+	log.Printf("Cache stats: %d hits, %d misses, %d entries\n", cacheHits, cacheMisses, productCacheSize)
 }
